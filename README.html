@@ -1,42 +1,107 @@
-<html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSM Cover Builder</title>
+</head>
 <body>
-<h3>Plugin Builder Results</h3>
+    <h1>GSM Cover Builder</h1>
+    
+    <h2>Description</h2>
+    <p><strong>GSM Cover Builder</strong> est un plugin QGIS conçu pour optimiser la planification du déploiement du réseau GSM.<br>
+       Il permet d'automatiser l'analyse de couverture en regroupant des localités selon un rayon défini par l'utilisateur et en générant des buffers optimisés.<br>
+       Il facilite ainsi la prise de décision pour le déploiement des infrastructures de télécommunication.</p>
+    
+    <h2>Fonctionnalités</h2>
+    <ul>
+        <li>Sélection d'une couche de localités en entrée.</li>
+        <li>Définition d'un champ identifiant les localités.</li>
+        <li>Choix d'un rayon de couverture pour le regroupement des localités.</li>
+        <li>Option de raffinement des buffers avec des polygones de Voronoï.</li>
+    </ul>
+    
+    <h2>Installation</h2>
+    <ol>
+        <li>Téléchargez le plugin depuis le dépôt officiel.</li>
+        <li>Ouvrez QGIS et allez dans le gestionnaire d'extensions.</li>
+        <li>Installez et activez GSM Cover Builder.</li>
+    </ol>
+    
+    <h2>Utilisation</h2>
+    <ol>
+        <li>Ouvrir QGIS et charger une couche vectorielle contenant les localités.</li>
+        <li>Lancer <strong>GSM Cover Builder</strong> depuis le menu des plugins.</li>
+        <li>Sélectionner la couche et le champ identifiant les localités.</li>
+        <li>Définir le rayon de couverture souhaité.</li>
+        <li>Activer ou non l'option de raffinement par Voronoï.</li>
+        <li>Exécuter le traitement et visualiser les résultats sur la carte.</li>
+    </ol>
+    
+    <h2>Dépendances</h2>
+    <ul>
+        <li>QGIS 3.x</li>
+        <li>PyQt5</li>
+        <li>Processing</li>
+    </ul>
+    
+    <h2>Auteur</h2>
+    <p>Fadil Kristof GNANKAMBARY</p>
+    
+    <h2>Licence</h2>
+    <p>Ce plugin est distribué sous licence MIT. Voir le fichier <code>LICENSE</code> pour plus de détails.</p>
+    
+    <h2>Contact</h2>
+    <p>Pour toute assistance ou demande de renseignements, veuillez contacter Fadil Kristof GNANKAMBARY, <a href="mailto:krisfadil@live.fr">krisfadil@live.fr</a>.</p>
 
-Congratulations! You just built a plugin for QGIS!<br/><br />
-
-<div id='help' style='font-size:.9em;'>
-Your plugin <b>GSMCoverBuilder</b> was created in:<br>
-&nbsp;&nbsp;<b>C:\Geomarketing_OrangeBF\3.Mes script\gsm_cover_builder</b>
-<p>
-Your QGIS plugin directory is located at:<br>
-&nbsp;&nbsp;<b>C:/Users/WLHT6109/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins</b>
-<p>
-<h3>What's Next</h3>
-<ol>
-    <li>If resources.py is not present in your plugin directory, compile the resources file using pyrcc5 (simply use <b>pb_tool</b> or <b>make</b> if you have automake)
-    <li>Optionally, test the generated sources using <b>make test</b> (or run tests from your IDE)
-    <li>Copy the entire directory containing your new plugin to the QGIS plugin directory (see Notes below)
-    <li>Test the plugin by enabling it in the QGIS plugin manager
-    <li>Customize it by editing the implementation file <b>GSM_Cover_Builder.py</b>
-    <li>Create your own custom icon, replacing the default <b>icon.png</b>
-    <li>Modify your user interface by opening <b>GSM_Cover_Builder_dialog_base.ui</b> in Qt Designer
-</ol>
-Notes:
-<ul>
-    <li>You can use <b>pb_tool</b> to compile, deploy, and manage your plugin. Tweak the <i>pb_tool.cfg</i> file included with your plugin as you add files. Install <b>pb_tool</b> using 
-        <i>pip</i> or <i>easy_install</i>. See <b>http://loc8.cc/pb_tool</b> for more information.
-    <li>You can also use the <b>Makefile</b> to compile and deploy when you
-        make changes. This requires GNU make (gmake). The Makefile is ready to use, however you 
-        will have to edit it to add addional Python source files, dialogs, and translations.
-</ul>
-</div>
-<div style='font-size:.9em;'>
-<p>
-For information on writing PyQGIS code, see <b>http://loc8.cc/pyqgis_resources</b> for a list of resources.
-</p>
-</div>
-<p>
-&copy;2011-2019 GeoApt LLC - geoapt.com 
-</p>
+    <hr>
+    
+    <h1>GSM Cover Builder - QGIS Plugin</h1>
+    
+    <h2>Overview</h2>
+    <p><strong>GSM Cover Builder</strong> is a QGIS plugin designed to optimize GSM network deployment.<br>
+       It automates coverage analysis by grouping localities based on a user-defined radius and generating optimized buffers.<br>
+       This helps decision-making for telecom infrastructure deployment.</p>
+    
+    <h2>Features</h2>
+    <ul>
+        <li>Selection of an input vector layer containing localities.</li>
+        <li>Definition of a field identifying localities.</li>
+        <li>Choice of a coverage radius for locality grouping.</li>
+        <li>Option to refine buffers using Voronoi polygons.</li>
+    </ul>
+    
+    <h2>Installation</h2>
+    <ol>
+        <li>Download the plugin from the official repository.</li>
+        <li>Open QGIS and go to the Plugin Manager.</li>
+        <li>Install and activate GSM Cover Builder.</li>
+    </ol>
+    
+    <h2>Usage</h2>
+    <ol>
+        <li>Open QGIS and load a vector layer containing localities.</li>
+        <li>Launch <strong>GSM Cover Builder</strong> from the plugins menu.</li>
+        <li>Select the input layer and the field identifying localities.</li>
+        <li>Define the desired coverage radius.</li>
+        <li>Enable or disable Voronoi refinement.</li>
+        <li>Run the process and visualize results on the map.</li>
+    </ol>
+    
+    <h2>Dependencies</h2>
+    <ul>
+        <li>QGIS 3.x</li>
+        <li>PyQt5</li>
+        <li>Processing</li>
+    </ul>
+    
+    <h2>Author</h2>
+    <p>Fadil Kristof GNANKAMBARY</p>
+    
+    <h2>License</h2>
+    <p>This plugin is distributed under the MIT License. See the <code>LICENSE</code> file for details.</p>
+    
+    <h2>Contact</h2>
+    <p>For support or inquiries, please contact Fadil Kristof GNANKAMBARY, <a href="mailto:krisfadil@live.fr">krisfadil@live.fr</a>.</p>
 </body>
 </html>
