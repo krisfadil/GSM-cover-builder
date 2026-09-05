@@ -23,9 +23,9 @@
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QApplication, QMessageBox
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer, QgsDistanceArea, QgsFeature, QgsGeometry, QgsField, QgsPointXY, QgsCoordinateReferenceSystem, QgsCoordinateTransform
-from .resources import *
+from . import resources  # noqa: F401  (enregistre :/plugins/GSM_Cover_Builder/icon.png)
 from .GSM_Cover_Builder_dialog import GSMCoverBuilderDialog
 import os.path
 import processing  # Import du module processing
@@ -47,8 +47,9 @@ class GSMCoverBuilder:
         self.iface = iface
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
-        # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        # initialize locale (robuste si QSettings vide)
+        locale_val = QSettings().value('locale/userLocale')
+        locale = str(locale_val)[0:2] if locale_val else 'en'
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
@@ -143,23 +144,36 @@ class GSMCoverBuilder:
         if self.first_start:
             self.first_start = False
             self.dlg = GSMCoverBuilderDialog()
+            # NB : les signaux layerChanged/fieldChanged sont déjà connectés
+            # dans GSMCoverBuilderDialog.__init__, ne pas reconnecter ici
+            # pour éviter les doubles appels.
 
-            # Connecter la couche et le champ avec les événements
-            self.dlg.mMapLayerComboBox.layerChanged.connect(self.dlg.update_fields)
-            self.dlg.mFieldComboBox.fieldChanged.connect(self.on_field_changed)
+        # Réinitialiser la progression à chaque ouverture
+        self.dlg.reset_progress("Prêt")
+        self.dlg.set_processing(False)
 
         # Afficher le dialogue
         self.dlg.show()
-        # Exécuter la boucle d'événements du dialogue
-        result = self.dlg.exec_()
-        
+        # Exécuter la boucle d'événements du dialogue (Qt5/Qt6)
+        result = getattr(self.dlg, "exec")()
+
         # Vérifier si l'utilisateur a validé le dialogue
         if result:
             # Récupérer la couche sélectionnée
             input_layer = self.dlg.mMapLayerComboBox.currentLayer()
-            
+
             # Récupérer le champ sélectionné
             loc_name_field = self.dlg.mFieldComboBox.currentField()
+
+            # Validations de base (sans fermer définitivement sur erreur)
+            if input_layer is None:
+                QMessageBox.warning(self.dlg, "GSM Cover Builder", "Veuillez sélectionner une couche de points en entrée.")
+                self.dlg.show()
+                return
+            if not loc_name_field:
+                QMessageBox.warning(self.dlg, "GSM Cover Builder", "Veuillez sélectionner un champ identifiant.")
+                self.dlg.show()
+                return
 
             # Récupérer la valeur du DoubleSpinBox (distance seuil)
             distance_threshold = self.dlg.doubleSpinBox.value()
@@ -167,18 +181,60 @@ class GSMCoverBuilder:
             # Récupérer l'état de la CheckBox (générer Voronoï)
             generate_voronoi = "oui" if self.dlg.checkBox.isChecked() else "non"
 
-            # Afficher les variables pour vérifier si elles ont bien été récupérées
-            #print(f"Shapefile Path: {input_layer}")
             print(f"Location Name Field: {loc_name_field}")
             print(f"Distance Threshold: {distance_threshold}")
             print(f"Generate Voronoi: {generate_voronoi}")
 
-            # Passer ces paramètres à la méthode de traitement des données
-            self.process_data(input_layer, loc_name_field, distance_threshold, generate_voronoi)
+            # Garder l'interface visible pendant le traitement
+            self.dlg.show()
+            self.dlg.set_processing(True)
+            self.dlg.set_progress(0, "Démarrage du traitement...")
+            QApplication.processEvents()
 
-    def process_data(self, input_layer, loc_name_field, distance_threshold, generate_voronoi):
+            try:
+                # Passer ces paramètres à la méthode de traitement des données
+                self.process_data(
+                    input_layer,
+                    loc_name_field,
+                    distance_threshold,
+                    generate_voronoi,
+                    progress_callback=self.dlg.set_progress,
+                )
+            except Exception as e:
+                self.dlg.set_processing(False)
+                self.dlg.set_progress(0, "Erreur pendant le traitement")
+                QMessageBox.critical(self.dlg, "GSM Cover Builder", f"Erreur pendant le traitement :\n{e}")
+                self.dlg.show()
+                return
+
+            self.dlg.set_progress(100, "Traitement terminé")
+            self.dlg.set_processing(False)
+            # L'interface reste affichée : l'utilisateur la ferme manuellement
+            self.dlg.show()
+
+    def process_data(self, input_layer, loc_name_field, distance_threshold, generate_voronoi, progress_callback=None):
         """Traitement géospatial pour la gestion des pivots et satellites"""
-        
+
+        def _progress(value, message=None):
+            if progress_callback is not None:
+                try:
+                    progress_callback(value, message)
+                except TypeError:
+                    # Compatibilité si callback n'accepte qu'une valeur
+                    progress_callback(value)
+            QApplication.processEvents()
+
+        _progress(2, "Copie des localités...")
+
+        # CRS source (peut être UTM / projeté) et CRS de travail WGS84
+        source_crs = input_layer.crs()
+        dest_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+        need_transform = source_crs.isValid() and source_crs != dest_crs
+        if need_transform:
+            to_wgs84 = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+        else:
+            to_wgs84 = None
+
         # Créer une nouvelle couche vide nommée "Localités"
         localites_vide = QgsVectorLayer("Point?crs=EPSG:4326", "Localités", "memory")
         localites_provider = localites_vide.dataProvider()
@@ -192,15 +248,45 @@ class GSMCoverBuilder:
         localites_vide.updateFields()
 
         # Copier les noms des localités de la couche d'origine dans la couche Localités
-        for feature in input_layer.getFeatures():
+        # en reprojetant vers EPSG:4326 si nécessaire (cas couche UTM)
+        input_features = list(input_layer.getFeatures())
+        total_input = len(input_features) or 1
+        for i, feature in enumerate(input_features):
+            src_geom = feature.geometry()
+            if src_geom is None or src_geom.isEmpty():
+                continue
+            # Extraire un point robuste (point simple ou premier sommet)
+            if src_geom.isMultipart():
+                pts = src_geom.asMultiPoint()
+                if not pts:
+                    continue
+                src_point = pts[0]
+                geom = QgsGeometry.fromPointXY(src_point)
+            else:
+                try:
+                    src_point = src_geom.asPoint()
+                except Exception:
+                    # Géométrie non ponctuelle : repli sur centroïde
+                    src_point = src_geom.centroid().asPoint()
+                geom = QgsGeometry.fromPointXY(QgsPointXY(src_point))
+            if to_wgs84 is not None:
+                try:
+                    geom.transform(to_wgs84)
+                except Exception as e:
+                    raise ValueError(f"Impossible de reprojeter la couche {source_crs.authid()} vers EPSG:4326 : {e}")
+            wgs_point = geom.asPoint()
             localite_feature = QgsFeature()
-            localite_feature.setGeometry(feature.geometry())  # Copier la géométrie
+            localite_feature.setGeometry(geom)
             localite_feature.setAttributes([
-                feature[loc_name_field],  # Remplacer par le champ du nom des localités
-                feature.geometry().asPoint().y(),  # Latitude
-                feature.geometry().asPoint().x()   # Longitude
+                feature[loc_name_field],
+                wgs_point.y(),  # Latitude
+                wgs_point.x()   # Longitude
             ])
             localites_provider.addFeature(localite_feature)
+            if i % 100 == 0 or i == total_input - 1:
+                _progress(2 + int(8 * (i + 1) / total_input), f"Copie des localités... {i + 1}/{total_input}")
+
+        _progress(10, "Identification des pivots et satellites...")
     
         # Ajouter la couche Localités au projet
         # QgsProject.instance().addMapLayer(localites_vide)
@@ -224,8 +310,9 @@ class GSMCoverBuilder:
         ])
         output_layer.updateFields()
 
-        # Initialiser l'outil de mesure des distances
+        # Initialiser l'outil de mesure des distances (géodésique WGS84 sur couches EPSG:4326)
         distance_calculator = QgsDistanceArea()
+        distance_calculator.setSourceCrs(dest_crs, QgsProject.instance().transformContext())
         distance_calculator.setEllipsoid("WGS84")
 
         # Liste des localités traitées comme satellites
@@ -235,7 +322,8 @@ class GSMCoverBuilder:
         features = list(localites_vide.getFeatures())  # Utiliser la nouvelle couche Localités
 
         # Identifier les pivots et leurs satellites
-        for pivot in features:
+        total_pivots = len(features) or 1
+        for idx, pivot in enumerate(features):
             if pivot.id() in treated_localities:
                 continue
 
@@ -274,6 +362,11 @@ class GSMCoverBuilder:
 
                     # Marquer cette localité comme traitée (couverte par un pivot)
                     treated_localities.add(satellite.id())
+
+            if idx % 10 == 0 or idx == total_pivots - 1:
+                _progress(10 + int(30 * (idx + 1) / total_pivots), f"Analyse des pivots... {idx + 1}/{total_pivots}")
+
+        _progress(40, "Création de la couche Loc_pivots...")
 
         # ---- Créer la couche Loc_pivots ----
 
@@ -328,25 +421,31 @@ class GSMCoverBuilder:
 
         # ---- Projeter les Loc_pivots en créant plusieurs couches par zone UTM ----
 
+        _progress(50, "Projection UTM des pivots...")
         utm_layers = {}
+        wgs84_crs = QgsCoordinateReferenceSystem("EPSG:4326")
 
         for feature in loc_pivots.getFeatures():
             zone = feature["zone_utm"]
-            
-            # Créer une couche pour chaque zone UTM si elle n'existe pas
-            if zone not in utm_layers:
-                utm_layers[zone] = QgsVectorLayer("Point?crs=EPSG:326" + f"{zone:02d}", f"Loc_pivots_utm_zone_{zone}", "memory")
-                utm_layers[zone].dataProvider().addAttributes([
+            hemi = feature["hemisphere"]
+            key = (zone, hemi)
+
+            # Créer une couche par couple (zone, hémisphère) avec le bon EPSG
+            if key not in utm_layers:
+                epsg_code = f"326{zone:02d}" if hemi == "Nord" else f"327{zone:02d}"
+                utm_layers[key] = QgsVectorLayer(f"Point?crs=EPSG:{epsg_code}", f"Loc_pivots_utm_zone_{zone}_{hemi}", "memory")
+                utm_layers[key].dataProvider().addAttributes([
                     QgsField("pivot", QVariant.String),
                     QgsField("LAT_piv", QVariant.Double),
                     QgsField("LON_piv", QVariant.Double)
                 ])
-                utm_layers[zone].updateFields()
+                utm_layers[key].updateFields()
 
             # Transformer les coordonnées
-            utm_crs = QgsCoordinateReferenceSystem(f"EPSG:326{zone:02d}" if feature["hemisphere"] == "Nord" else f"EPSG:327{zone:02d}")
-            transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), utm_crs, QgsProject.instance())
-            
+            epsg_code = f"326{zone:02d}" if hemi == "Nord" else f"327{zone:02d}"
+            utm_crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg_code}")
+            transformer = QgsCoordinateTransform(wgs84_crs, utm_crs, QgsProject.instance().transformContext())
+
             point = feature.geometry().asPoint()
             transformed_point = transformer.transform(point)
 
@@ -358,13 +457,15 @@ class GSMCoverBuilder:
                 feature["LAT_piv"],  # Latitude
                 feature["LON_piv"]   # Longitude
             ])
-            utm_layers[zone].dataProvider().addFeature(new_feature)
+            utm_layers[key].dataProvider().addFeature(new_feature)
 
         # ---- Créer des buffers pour chaque couche UTM ----
 
+        _progress(60, "Création des buffers...")
         buffer_layers = []
 
-        for zone, layer in utm_layers.items():
+        utm_zones = list(utm_layers.items())
+        for j, ((zone, hemi), layer) in enumerate(utm_zones):
             # Utilisation de l'algorithme de traitement 'native:buffer'
             params = {
                 'INPUT': layer,                # Couche d'entrée
@@ -376,10 +477,13 @@ class GSMCoverBuilder:
 
             # Exécuter l'algorithme de buffer
             buffer_result = processing.run("native:buffer", params)['OUTPUT']
-            buffer_result.setName(f"buffer_zone_{zone}")
+            buffer_result.setName(f"buffer_zone_{zone}_{hemi}")
             buffer_layers.append(buffer_result)  # Conserver la référence pour la fusion
+            _progress(60 + int(15 * (j + 1) / (len(utm_zones) or 1)), f"Buffer zone UTM {zone} ({hemi})...")
 
         # ---- Reprojeter les buffers en WGS 84 et fusionner dans range_pivot ----
+
+        _progress(75, "Reprojection et fusion des buffers...")
 
         # Créer une couche pour stocker le résultat fusionné
         merged_buffer = QgsVectorLayer("Polygon?crs=EPSG:4326", "range_pivot_buffer", "memory")
@@ -394,7 +498,7 @@ class GSMCoverBuilder:
         merged_buffer.updateFields()
 
         # Reprojeter et ajouter les buffers à la couche fusionnée
-        for buffer_layer in buffer_layers:
+        for k, buffer_layer in enumerate(buffer_layers):
             # Reprojeter le buffer en WGS 84
             params = {
                 'INPUT': buffer_layer,
@@ -404,17 +508,35 @@ class GSMCoverBuilder:
             reproj_buffer = processing.run("native:reprojectlayer", params)['OUTPUT']
             
             # Ajouter les features reprojetées à la couche fusionnée
+            # (mapping explicite : le buffer porte pivot/LAT_piv/LON_piv, pas Name/LAT/LON)
             for feature in reproj_buffer.getFeatures():
-                merged_buffer_provider.addFeature(feature)
+                def _get(fname, default=None):
+                    try:
+                        v = feature[fname]
+                        return v if v is not None else default
+                    except Exception:
+                        return default
+                mf = QgsFeature(merged_buffer.fields())
+                mf.setGeometry(feature.geometry())
+                mf.setAttributes([
+                    _get("pivot", _get("Name")),
+                    _get("LAT_piv", _get("LAT")),
+                    _get("LON_piv", _get("LON")),
+                ])
+                merged_buffer_provider.addFeature(mf)
+            merged_buffer.updateExtents()
+            _progress(75 + int(10 * (k + 1) / (len(buffer_layers) or 1)), f"Fusion des buffers... {k + 1}/{len(buffer_layers)}")
 
         # ---- Contrôle de génération des polygones de Voronoï ----
 
         if generate_voronoi.lower() == "non":
+            _progress(88, "Ajout des buffers au projet...")
             # Ajouter la couche fusionnée au projet
             QgsProject.instance().addMapLayer(merged_buffer)
-            
+
         else:
             # ---- Créer des polygones de Voronoï autour des localités pivots ----
+            _progress(85, "Création des polygones de Voronoï...")
 
             # Utilisation de l'algorithme de traitement 'qgis:voronoipolygons'
             voronoi_params = {
@@ -437,8 +559,11 @@ class GSMCoverBuilder:
             clipped_result = processing.run("native:clip", clip_params)['OUTPUT']
             clipped_result.setName("range_pivot_veronoï")
             QgsProject.instance().addMapLayer(clipped_result)  # Ajouter la couche au projet
+            _progress(90, "Découpage Voronoï terminé...")
 
         # ---- Gestion des doublons parmi les satellites ----
+
+        _progress(92, "Filtrage des satellites en doublon...")
 
         # Dictionnaire pour stocker les doublons
         duplicates = defaultdict(list)
@@ -454,16 +579,16 @@ class GSMCoverBuilder:
         filtered_features = []
 
         # Traiter les doublons
-        for key, features in duplicates.items():
-            if len(features) > 1:
+        for key, dup_list in duplicates.items():
+            if len(dup_list) > 1:
                 # Classer les doublons par distance
-                features.sort(key=lambda f: f["dist_m"])
-                
+                dup_list.sort(key=lambda f: f["dist_m"])
+
                 # Conserver uniquement la localité avec la distance minimale
-                filtered_features.append(features[0])
+                filtered_features.append(dup_list[0])
             else:
                 # Si pas de doublon, ajouter directement
-                filtered_features.append(features[0])
+                filtered_features.append(dup_list[0])
 
         # Créer une nouvelle couche pour stocker les résultats filtrés
         filtered_layer = QgsVectorLayer("Point?crs=EPSG:4326", "Loc_satellites", "memory")
@@ -497,8 +622,10 @@ class GSMCoverBuilder:
         loc_pivots.updateFields()  # Mettre à jour les champs de la couche
 
         # Ajouter les couches de sortie au projet
+        _progress(97, "Ajout des couches au projet...")
         QgsProject.instance().addMapLayer(output_layer)     # Ajouter la couche Localités et Pivots au projet
         QgsProject.instance().addMapLayer(filtered_layer)   # Ajouter la couche Loc_satellites au projet
         QgsProject.instance().addMapLayer(loc_pivots)       # Ajouter la couche loc_pivots au projet
 
+        _progress(100, "Traitement terminé")
         print("Le traitement est terminé. Les couches 'Loc_pivots', 'Loc_pivots_utm', et 'Loc_satellites' ont été créées, et chaque buffer a été ajouté au projet.")

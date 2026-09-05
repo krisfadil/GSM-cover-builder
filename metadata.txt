@@ -6,13 +6,13 @@
 name=GSM Cover Builder
 qgisMinimumVersion=3.0
 description=GSM Cover Builder allows you to quickly generate coverage plans based on localities and a defined coverage radius
-version=0.1
+version=0.2.0
 author=Fadil Kristof GNANKAMBARY
 email=krisfadil@live.fr
 
 about=The GSM Cover Builder plugin for QGIS is designed to help geomarketing professionals optimize GSM network coverage in specific areas. Using this tool, you can analyze and visualize proximity relationships between localities and determine the minimum number of GSM sites necessary to effectively cover a set of areas.
 
-tracker=https://github.com/krisfadil/GSM-cover-builder
+tracker=https://github.com/krisfadil/GSM-cover-builder/issues
 repository=https://github.com/krisfadil/GSM-cover-builder
 # End of mandatory metadata
 
@@ -20,13 +20,13 @@ repository=https://github.com/krisfadil/GSM-cover-builder
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-# changelog=
+changelog=0.2: filtre couches points, jauge de progression persistante, support couches UTM/projetees, fix hemisphere Sud et fusion buffers, reset auto au changement de couche. Voir CHANGELOG.md
 
 # Tags are comma separated with spaces allowed
 tags=python
 
 homepage=https://github.com/krisfadil/GSM-cover-builder
-category=Plugins
+category=Vector
 icon=icon.png
 # experimental flag
 experimental=False

@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>GSMCoverBuilderDialogBase</class>
- <widget class="QDialog" name="GSMCoverBuilderDialogBase">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>402</width>
-    <height>293</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>GSM Cover Builder</string>
-  </property>
-  <widget class="QDialogButtonBox" name="button_box">
+  <widget class="QDialog" name="GSMCoverBuilderDialogBase">
    <property name="geometry">
     <rect>
-     <x>30</x>
-     <y>240</y>
-     <width>341</width>
-     <height>32</height>
+     <x>0</x>
+     <y>0</y>
+     <width>402</width>
+     <height>335</height>
     </rect>
    </property>
+   <property name="windowTitle">
+    <string>GSM Cover Builder</string>
+   </property>
+   <widget class="QDialogButtonBox" name="button_box">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>285</y>
+      <width>341</width>
+      <height>32</height>
+     </rect>
+    </property>
    <property name="orientation">
     <enum>Qt::Horizontal</enum>
    </property>
@@ -104,17 +104,49 @@
     <string>Champ d'identifiant unique de la couche en entrée</string>
    </property>
   </widget>
-  <widget class="QgsFieldComboBox" name="mFieldComboBox">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>100</y>
-     <width>371</width>
-     <height>27</height>
-    </rect>
-   </property>
+   <widget class="QgsFieldComboBox" name="mFieldComboBox">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>100</y>
+      <width>371</width>
+      <height>27</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelProgress">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>222</y>
+      <width>371</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Prêt</string>
+    </property>
+   </widget>
+   <widget class="QProgressBar" name="progressBar">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>242</y>
+      <width>371</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>100</number>
+    </property>
+    <property name="value">
+     <number>0</number>
+    </property>
+    <property name="textVisible">
+     <bool>true</bool>
+    </property>
+   </widget>
   </widget>
- </widget>
  <customwidgets>
   <customwidget>
    <class>QgsFieldComboBox</class>

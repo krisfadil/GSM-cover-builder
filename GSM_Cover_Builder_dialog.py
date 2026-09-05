@@ -24,7 +24,7 @@
 
 import os
 from qgis.PyQt import uic
-from qgis.PyQt.QtWidgets import QDialog, QFormLayout
+from qgis.PyQt.QtWidgets import QDialog, QFormLayout, QApplication, QDialogButtonBox
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.core import QgsMapLayerProxyModel
 
@@ -38,7 +38,9 @@ class GSMCoverBuilderDialog(QDialog, FORM_CLASS):
         self.setupUi(self)
 
         # Initialiser les éléments QgsMapLayerComboBox et QgsFieldComboBox
-        self.mMapLayerComboBox.setFilters(QgsMapLayerProxyModel.VectorLayer)
+        # N'afficher que les couches de points (Qt5/Qt6 : enum Filter scopée)
+        _point_filter = getattr(getattr(QgsMapLayerProxyModel, "Filter", QgsMapLayerProxyModel), "PointLayer")
+        self.mMapLayerComboBox.setFilters(_point_filter)
         self.mMapLayerComboBox.setCurrentIndex(-1)  # Aucun élément sélectionné au début
 
         # Connecter le signal layerChanged pour mettre à jour les champs dans mFieldComboBox
@@ -47,14 +49,55 @@ class GSMCoverBuilderDialog(QDialog, FORM_CLASS):
         # Connecter le signal de changement de champ
         self.mFieldComboBox.fieldChanged.connect(self.on_field_changed)
 
-    def update_fields(self):
-        """Mettre à jour la liste des champs de la couche sélectionnée dans mFieldComboBox."""
+        # Initialiser la barre de progression
+        self.progressBar.setValue(0)
+        self.labelProgress.setText("Prêt")
+
+    def update_fields(self, *args):
+        """Mettre à jour la liste des champs + réinitialiser les autres inputs et la jauge."""
         layer = self.mMapLayerComboBox.currentLayer()
         if layer:
             self.mFieldComboBox.setLayer(layer)  # Met à jour les champs de la couche sélectionnée
             self.mFieldComboBox.setCurrentIndex(-1)  # Réinitialise la sélection du champ
 
+        # Réinitialiser les autres inputs pour un nouveau traitement
+        self.doubleSpinBox.setValue(0.0)
+        self.checkBox.setChecked(False)
+
+        # Réinitialiser la jauge et réactiver les contrôles
+        self.reset_progress("Prêt")
+        self.set_processing(False)
+
     def on_field_changed(self, fieldName):
         """Réagir au changement de champ dans mFieldComboBox."""
         print(f"Champ sélectionné : {fieldName}")
         # Je peux ici alimenter une variable ou un paramètre du script avec fieldName
+
+    def set_progress(self, value, message=None):
+        """Met à jour la jauge et le message, sans fermer le dialogue."""
+        self.progressBar.setValue(int(value))
+        if message is not None:
+            self.labelProgress.setText(message)
+        QApplication.processEvents()
+
+    def set_processing(self, processing):
+        """Désactive les contrôles pendant le traitement."""
+        self.mMapLayerComboBox.setEnabled(not processing)
+        self.mFieldComboBox.setEnabled(not processing)
+        self.doubleSpinBox.setEnabled(not processing)
+        self.checkBox.setEnabled(not processing)
+        # Empêche de relancer via OK pendant le traitement (Qt5/Qt6 : enum scopée)
+        try:
+            _ok_flag = getattr(getattr(QDialogButtonBox, "StandardButton", QDialogButtonBox), "Ok")
+            ok_button = self.button_box.button(_ok_flag)
+        except Exception:
+            ok_button = None
+        if ok_button is not None:
+            ok_button.setEnabled(not processing)
+        QApplication.processEvents()
+
+    def reset_progress(self, message="Prêt"):
+        """Remet la jauge à zéro."""
+        self.progressBar.setValue(0)
+        self.labelProgress.setText(message)
+        QApplication.processEvents()
